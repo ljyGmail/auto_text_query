@@ -14,19 +14,22 @@ import logging
 from logging import handlers
 import traceback
 import sys
-from PyQt6.QtCore import QSize
+from PyQt6.QtCore import pyqtSignal, QThread
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
-    QHBoxLayout,
+    QGridLayout,
     QLabel,
-    QMainWindow,
+    QLineEdit,
+    QMessageBox,
+    QProgressBar,
     QPushButton,
-    QStatusBar,
-    QVBoxLayout,
+    QTextEdit,
     QWidget,
 )
 
+basedir = os.path.dirname(__file__)
 
 # 로그 셋팅
 log_formatter = logging.Formatter(
@@ -45,79 +48,56 @@ logger.addHandler(log_handler)
 SITE_URL = "https://apps.crossref.org/SimpleTextQuery"
 GET_RESULT_TIMEOUT = 1800
 RESULT_XPATH = '//*[@id="mainContent2"]/div/form/font/table/tbody/tr/td/table/tbody/tr/td[2]/table/tbody/tr/td/table/tbody/tr[5]/td/table'
+FILE_NAME_REG = r'[A-Za-z]{2}\d{8}.txt'
 
 chrome_options = Options()  # 크롬 브라우저 옵션 설정
 chrome_options.add_experimental_option('detach', True)
 
+style_sheet = """
+    QProgressBar{
+        background-color: #C0C6CA;
+        color: #FFFFFF;
+        border: 1px solid grey;
+        padding: 3px;
+        height: 15px;
+        text-align: center;
+    }
 
-class MainWindow(QMainWindow):
+    QProgressBar::chunk{
+        background: #538DB8;
+        width: 5px;
+        margin: 0.5px
+    }
+"""
 
-    def __init__(self):
+
+class Worker(QThread):
+    update_progress_bar_signal = pyqtSignal(int)
+    update_text_edit_signal = pyqtSignal(str)
+    clear_text_edit_signal = pyqtSignal()
+
+    def __init__(self, src_dir, dest_dir):
         super().__init__()
+        self.src_dir = src_dir
+        self.dest_dir = dest_dir
 
-        self.setWindowTitle('Auto Text Query')
+    def stop_running(self):
+        """Terminate the thread."""
+        self.terminate()
+        self.wait()
 
-        layout = QVBoxLayout()
+        self.update_progress_bar_signal.emit(0)
+        self.clear_text_edit_signal.emit()
 
-        src_row_layout = QHBoxLayout()
-        dest_row_layout = QHBoxLayout()
-
-        layout.addLayout(src_row_layout)
-        layout.addLayout(dest_row_layout)
-
-        src_label = QLabel('원본 폴더 지정:')
-        src_btn = QPushButton('찾기')
-        src_btn.clicked.connect(self.get_folder_src)
-        self.src_path_label = QLabel('')
-        src_row_layout.addWidget(src_label)
-        src_row_layout.addWidget(src_btn)
-        src_row_layout.addWidget(self.src_path_label)
-
-        dest_label = QLabel('결과 폴더 지정:')
-        dest_btn = QPushButton('찾기')
-        dest_btn.clicked.connect(self.get_folder_dest)
-        self.dest_path_label = QLabel('')
-        dest_row_layout.addWidget(dest_label)
-        dest_row_layout.addWidget(dest_btn)
-        dest_row_layout.addWidget(self.dest_path_label)
-
-        process_btn = QPushButton('시작')
-        process_btn.clicked.connect(self.start_process)
-        layout.addWidget(process_btn)
-
-        container = QWidget()
-        container.setLayout(layout)
-
-        self.setStatusBar(QStatusBar(self))
-        # self.setFixedSize(QSize(500, 250))
-        self.setCentralWidget(container)
-
-    def get_folder_src(self):
-        initial_dir = '../lab_for_auto_text_query'
-        folder_path = QFileDialog.getExistingDirectory(
-            self, directory=initial_dir)
-        self.src_path_label.setText(folder_path)
-        print(f'path for src:', folder_path)
-
-    def get_folder_dest(self):
-        initial_dir = '../lab_for_auto_text_query'
-        folder_path = QFileDialog.getExistingDirectory(
-            self, directory=initial_dir)
-        self.dest_path_label.setText(folder_path)
-        print(f'path for dest:', folder_path)
-
-    def start_process(self):
-        print('###############################################')
+    def run(self):
         logging.info(f"{'#' * 10} 처리 시작 {'#' * 10}")
-        src_path = self.src_path_label.text()
-        dest_path = self.dest_path_label.text()
 
-        regex = re.compile(r'[A-Za-z]{2}\d{8}.txt')
-        file_list = os.listdir(src_path)
+        regex = re.compile(FILE_NAME_REG)
+        file_list = os.listdir(self.src_dir)
         logging.info(f'원본 폴더내 파일 수: {len(file_list)}')
 
         file_list = list(
-            filter(lambda x: regex.search(x), os.listdir(src_path)))
+            filter(lambda x: regex.search(x), os.listdir(self.src_dir)))
         file_number = len(file_list)
         logging.info(f'실제 처리할 파일 수: {file_number}')
 
@@ -127,7 +107,7 @@ class MainWindow(QMainWindow):
                 logging.info(
                     f'==========> {filename} ({index + 1} / {file_number})')
 
-                with open(Path(src_path) / filename, encoding='UTF8') as fh:
+                with open(Path(self.src_dir) / filename, encoding='UTF8') as fh:
                     content = fh.read()  # 원본 내용 가져오기
                     pyperclip.copy(content)  # 원본내용을 클릭보드에 복사
 
@@ -183,21 +163,146 @@ class MainWindow(QMainWindow):
                 logging.debug(f'처리된 결과: {result_text}')
                 time.sleep(0.5)
 
-                with open(Path(dest_path) / filename, 'w', encoding='UTF-8') as fh:
+                with open(Path(self.dest_dir) / filename, 'w', encoding='UTF-8') as fh:
                     fh.write(result_text)
                     logging.info('결과 텍스트를 파일에 쓰기 완료')
 
                 browser.quit()
                 logging.info('브라우저 종료')
+                self.update_progress_bar_signal.emit(index + 1)
+                self.update_text_edit_signal.emit(
+                    f'[INFO] ==> {filename} 처리완료 ({index + 1} / {file_number})')
             except:
                 logging.error(traceback.format_exc())
+                self.update_progress_bar_signal.emit(index + 1)
+                self.update_text_edit_signal.emit(
+                    f'[ERROR] ==> {filename} 치리오류 ({index + 1} / {file_number})')
 
-        logging.info(f"{'#' * 10} 처리 완료 {'#' * 10}")
+        # 프로그래스 바의 값을 0으로 리셋
+        self.update_progress_bar_signal.emit(0)
 
 
-app = QApplication(sys.argv)
+class MainWindow(QWidget):
 
-window = MainWindow()
-window.show()
+    def __init__(self):
+        super().__init__()
+        self.initializeUI()
 
-app.exec()
+    def initializeUI(self):
+        """Set up the application's GUI."""
+        self.setWindowTitle('Auto Text Query')
+        self.setGeometry(1300, 100, 600, 400)
+        self.setFixedSize(700, 600)
+        self.setWindowIcon(QIcon(os.path.join(basedir, 'icon.png')))
+
+        self.src_dir = ''
+        self.dest_dir = ''
+
+        self.setUpMainWindow()
+        self.show()
+
+    def setUpMainWindow(self):
+        """Create and arrange widgets in the main window."""
+        dir_label = QLabel(
+            """<p>원본폴더 / 결과폴더를 선택하세요:</p>""")
+        self.src_dir_edit = QLineEdit()
+        src_dir_button = QPushButton("원본 폴더")
+        src_dir_button.setToolTip("원본 폴더 선택")
+        src_dir_button.clicked.connect(self.choose_directory)
+
+        self.dest_dir_edit = QLineEdit()
+        dest_dir_button = QPushButton("결과 폴더")
+        dest_dir_button.setToolTip("결과  폴더 선택")
+        dest_dir_button.clicked.connect(self.choose_directory)
+
+        start_button = QPushButton('시작')
+        start_button.setToolTip('처리 시작')
+        start_button.clicked.connect(self.start_process)
+
+        self.display_log_tedit = QTextEdit()
+        self.display_log_tedit.setReadOnly(True)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setValue(0)
+
+        self.stop_button = QPushButton('중지')
+        self.stop_button.setEnabled(False)
+
+        # Create layout and arrange widgets
+        grid = QGridLayout()
+
+        grid.addWidget(dir_label, 0, 0)
+
+        grid.addWidget(self.src_dir_edit, 1, 0, 1, 2)
+        grid.addWidget(src_dir_button, 1, 2)
+
+        grid.addWidget(self.dest_dir_edit, 2, 0, 1, 2)
+        grid.addWidget(dest_dir_button, 2, 2)
+
+        grid.addWidget(start_button, 3, 0, 1, 2)
+
+        grid.addWidget(self.display_log_tedit, 4, 0, 1, 3)
+
+        grid.addWidget(self.progress_bar, 5, 0, 1, 2)
+        grid.addWidget(self.stop_button, 5, 2)
+
+        self.setLayout(grid)
+
+    def choose_directory(self):
+        btn_text = self.sender().text()
+
+        file_dialog = QFileDialog(self)
+        file_dialog.setFileMode(QFileDialog.FileMode.Directory)
+        selected_dir = file_dialog.getExistingDirectory(
+            self, '폴더 선택', '', QFileDialog.Option.ShowDirsOnly)
+
+        if selected_dir and '원본' in btn_text:
+            self.src_dir_edit.setText(selected_dir)
+            print(selected_dir)
+
+            # 프로그래스 바의 최대값 설정
+            num_of_files = len(list(filter(lambda x: re.compile(
+                FILE_NAME_REG).search(x), os.listdir(selected_dir))))
+            if num_of_files > 0:
+                self.progress_bar.setRange(0, num_of_files)
+                self.src_dir = selected_dir
+            else:
+                self.src_dir = ''
+        elif selected_dir and '결과' in btn_text:
+            self.dest_dir_edit.setText(selected_dir)
+            self.dest_dir = selected_dir
+
+    def start_process(self):
+        """Create instance of worker thread to handle process."""
+        if self.src_dir != '' and self.dest_dir != '':
+            self.worker = Worker(self.src_dir, self.dest_dir)
+            self.display_log_tedit.clear()
+
+            self.stop_button.setEnabled(True)
+            self.stop_button.repaint()
+            self.stop_button.clicked.connect(self.worker.stop_running)
+
+            self.worker.update_progress_bar_signal.connect(
+                self.update_progress_bar)
+            self.worker.update_text_edit_signal.connect(self.update_text_edit)
+            self.worker.finished.connect(self.process_finished)
+            self.worker.start()
+        else:
+            QMessageBox.warning(self, '알림', '원본/결과 폴더를 모두 선택하세요!',
+                                QMessageBox.StandardButton.Ok)
+
+    def update_progress_bar(self, value):
+        self.progress_bar.setValue(value)
+
+    def update_text_edit(self, log_message):
+        self.display_log_tedit.append(log_message)
+
+    def process_finished(self):
+        self.display_log_tedit.append('### 처리 완료 ###')
+
+
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    app.setStyleSheet(style_sheet)
+    window = MainWindow()
+    sys.exit(app.exec())
