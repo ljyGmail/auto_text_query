@@ -35,6 +35,10 @@ basedir = os.path.dirname(__file__)
 log_formatter = logging.Formatter(
     ' %(asctime)s -  %(levelname)s -  %(message)s')
 
+log_path = Path(basedir) / 'logs'
+if not os.path.exists(log_path):
+    os.mkdir(log_path)
+
 # handler 세팅
 log_handler = handlers.TimedRotatingFileHandler(
     filename='logs/auto_text_query.log', when='midnight', interval=1, encoding='UTF8')
@@ -193,7 +197,6 @@ class MainWindow(QWidget):
         self.setWindowTitle('Auto Text Query')
         self.setGeometry(1300, 100, 600, 400)
         self.setFixedSize(700, 600)
-        self.setWindowIcon(QIcon(os.path.join(basedir, 'icon.png')))
 
         self.src_dir = ''
         self.dest_dir = ''
@@ -304,5 +307,6 @@ class MainWindow(QWidget):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     app.setStyleSheet(style_sheet)
+    app.setWindowIcon(QIcon(os.path.join(basedir, 'icon.png')))
     window = MainWindow()
     sys.exit(app.exec())
