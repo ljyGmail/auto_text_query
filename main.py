@@ -1,8 +1,9 @@
-import pyautogui
 import time
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
@@ -118,26 +119,24 @@ class Worker(QThread):
                     logging.info(f'원본 항목 수: {src_line_num}')
                     pyperclip.copy(content)  # 원본내용을 클릭보드에 복사
 
-                    logging.info('원본 텍스트 복사됨')
+                logging.info('원본 텍스트 복사됨')
 
-                    browser = webdriver.Chrome(
-                        'chromedriver.exe', options=chrome_options)  # 브라운저 열기
-                    browser.get(SITE_URL)
+                browser = webdriver.Chrome(
+                    'chromedriver.exe', options=chrome_options)  # 브라운저 열기
+                browser.get(SITE_URL)
 
-                    time.sleep(0.3)
+                textarea = browser.find_element(
+                    By.CSS_SELECTOR, '#freetext')
 
-                    # TAB을 5번 누르기
-                    pyautogui.write(['\t', '\t', '\t', '\t', '\t',])
-                    pyautogui.hotkey('ctrl', 'v')  # 복사된 원본 텍스트를 붙여놓기
+                textarea.click()
 
-                    for i in range(2):
-                        time.sleep(0.2)
-                        pyautogui.write(['\t', ' '])  # 체크박스 2개 체크
+                action = ActionChains(browser)
+                action.key_down(Keys.CONTROL).send_keys('V').key_up(Keys.CONTROL) \
+                    .send_keys(Keys.TAB).send_keys(Keys.SPACE) \
+                    .send_keys(Keys.TAB).send_keys(Keys.SPACE) \
+                    .send_keys(Keys.TAB).send_keys(Keys.ENTER).perform()
 
-                    time.sleep(0.2)
-                    pyautogui.write(['\t', 'enter'])  # 엔터 누르기
-
-                    logging.info('웹 화면에서 엔터 눌렀음')
+                logging.info('웹 화면에서 엔터 눌렀음')
 
                 elem = WebDriverWait(browser, GET_RESULT_TIMEOUT).until(
                     EC.presence_of_element_located((By.XPATH, RESULT_XPATH)))  # 결과 올때까지 대기
@@ -156,6 +155,7 @@ class Worker(QThread):
                 for row in rows:
                     td = row.td
                     count = len(td.contents)
+
                     if count > 0:
                         item = td.contents[0].string.text.strip().replace(
                             '\n      ', '')

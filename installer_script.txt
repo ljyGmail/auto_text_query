@@ -1,0 +1,1 @@
+pyinstaller -w -n 'Auto_Text_Query' --distpath c:\temp\auto\dist --workpath c:\temp\auto\build  .\main.py
