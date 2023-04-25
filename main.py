@@ -113,6 +113,9 @@ class Worker(QThread):
 
                 with open(Path(self.src_dir) / filename, encoding='UTF8') as fh:
                     content = fh.read()  # 원본 내용 가져오기
+                    fh.seek(0)
+                    src_line_num = len(fh.readlines())  # 원본 항목 수
+                    logging.info(f'원본 항목 수: {src_line_num}')
                     pyperclip.copy(content)  # 원본내용을 클릭보드에 복사
 
                     logging.info('원본 텍스트 복사됨')
@@ -174,8 +177,9 @@ class Worker(QThread):
                 browser.quit()
                 logging.info('브라우저 종료')
                 self.update_progress_bar_signal.emit(index + 1)
-                self.update_text_edit_signal.emit(
-                    f'[INFO] ==> {filename} 처리완료 ({index + 1} / {file_number})')
+                log_content = f'[INFO] ==> {filename} 처리완료 ({index + 1} / {file_number}) [{src_line_num} == {len(rows)}]' if src_line_num == len(
+                    rows) else f'[WARNING] ==> {filename} 처리완료 ({index + 1} / {file_number}) [{src_line_num} != {len(rows)}]'
+                self.update_text_edit_signal.emit(log_content)
             except:
                 logging.error(traceback.format_exc())
                 self.update_progress_bar_signal.emit(index + 1)
