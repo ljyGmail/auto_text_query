@@ -53,7 +53,7 @@ logger.addHandler(log_handler)
 SITE_URL = "https://apps.crossref.org/SimpleTextQuery"
 GET_RESULT_TIMEOUT = 1800
 RESULT_XPATH = '//*[@id="mainContent2"]/div/form/font/table/tbody/tr/td/table/tbody/tr/td[2]/table/tbody/tr/td/table/tbody/tr[5]/td/table'
-FILE_NAME_REG = r'[A-Za-z]{2}\d{8}.txt'
+FILE_NAME_REG = r'.*\.txt'
 
 chrome_options = Options()  # 크롬 브라우저 옵션 설정
 chrome_options.add_experimental_option('detach', True)
