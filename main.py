@@ -113,11 +113,11 @@ class Worker(QThread):
                     f'==========> {filename} ({index + 1} / {file_number})')
 
                 with open(Path(self.src_dir) / filename, encoding='UTF8') as fh:
-                    content = fh.read()  # 원본 내용 가져오기
+                    src_text = fh.read()  # 원본 내용 가져오기
                     fh.seek(0)
                     src_line_num = len(fh.readlines())  # 원본 항목 수
                     logging.info(f'원본 항목 수: {src_line_num}')
-                    pyperclip.copy(content)  # 원본내용을 클릭보드에 복사
+                    pyperclip.copy(src_text)  # 원본내용을 클릭보드에 복사
 
                 logging.info('원본 텍스트 복사됨')
 
@@ -170,15 +170,28 @@ class Worker(QThread):
                 logging.debug(f'처리된 결과: {result_text}')
                 time.sleep(0.5)
 
-                with open(Path(self.dest_dir) / filename, 'w', encoding='UTF-8') as fh:
-                    fh.write(result_text)
-                    logging.info('결과 텍스트를 파일에 쓰기 완료')
+                item_count_is_same = src_line_num == len(rows)
+
+                if item_count_is_same:  # 원본 항목수 와 결과 항목수가 일치하는 경우
+                    logging.info('원본 항목수와 결과 항목수 일치')
+                    with open(Path(self.dest_dir) / filename, 'w', encoding='UTF-8') as fh:
+                        fh.write(result_text)
+                        logging.info('결과 텍스트를 파일에 쓰기 완료')
+                else:  # 불일치하는 경우: 결과 폴더에 원본 텍스트를 쓰고 하위에 에러폴더를 생성해서 결과를 에러폴더에 저장
+                    logging.info('원본 항목수와 결과 항목수 불일치')
+                    with open(Path(self.dest_dir) / filename, 'w', encoding='UTF-8') as fh:
+                        fh.write(src_text)
+                        logging.info('원본 텍스트를 파일에 쓰기 완료')
+                        os.makedirs(Path(self.dest_dir) /
+                                    'error', exist_ok=True)  # 에러 폴더 생성
+                        with open(Path(self.dest_dir) / 'error' / filename, 'w', encoding='UTF-8') as err_fh:
+                            err_fh.write(result_text)
+                            logging.info('결과 텍스트를 에러 폴더에 쓰기 완료')
 
                 browser.quit()
                 logging.info('브라우저 종료')
                 self.update_progress_bar_signal.emit(index + 1)
-                log_content = f'[INFO] ==> {filename} 처리완료 ({index + 1} / {file_number}) [{src_line_num} == {len(rows)}]' if src_line_num == len(
-                    rows) else f'[WARNING] ==> {filename} 처리완료 ({index + 1} / {file_number}) [{src_line_num} != {len(rows)}]'
+                log_content = f'[INFO] ==> {filename} 처리완료 ({index + 1} / {file_number}) [{src_line_num} == {len(rows)}]' if item_count_is_same else f'[WARNING] ==> {filename} 처리완료 ({index + 1} / {file_number}) [{src_line_num} != {len(rows)}]'
                 self.update_text_edit_signal.emit(log_content)
             except:
                 logging.error(traceback.format_exc())
