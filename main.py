@@ -19,16 +19,21 @@ from PyQt6.QtCore import pyqtSignal, QThread
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
     QApplication,
+    QComboBox,
     QFileDialog,
     QGridLayout,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QStackedLayout,
     QTextEdit,
+    QVBoxLayout,
     QWidget,
 )
+from export_to_excel import export_to_excel
 
 basedir = os.path.dirname(__file__)
 
@@ -212,17 +217,22 @@ class MainWindow(QWidget):
     def initializeUI(self):
         """Set up the application's GUI."""
         self.setWindowTitle('Auto Text Query')
-        self.setGeometry(1300, 100, 600, 400)
+        self.setGeometry(500, 100, 600, 400)
         self.setFixedSize(700, 600)
 
         self.src_dir = ''
         self.dest_dir = ''
+        self.excel_dir = ''
 
         self.setUpMainWindow()
         self.show()
 
     def setUpMainWindow(self):
         """Create and arrange widgets in the main window."""
+        page_combo = QComboBox()
+        page_combo.addItems(['자동 텍스트 쿼리', '결과 데이터 엑셀 도출'])
+        page_combo.activated.connect(self.switchPage)
+
         dir_label = QLabel(
             """<p>원본폴더 / 결과폴더를 선택하세요:</p>""")
         self.src_dir_edit = QLineEdit()
@@ -249,6 +259,7 @@ class MainWindow(QWidget):
         self.stop_button.setEnabled(False)
 
         # Create layout and arrange widgets
+        # 자동 텍스트 쿼리 layout
         grid = QGridLayout()
 
         grid.addWidget(dir_label, 0, 0)
@@ -266,7 +277,61 @@ class MainWindow(QWidget):
         grid.addWidget(self.progress_bar, 5, 0, 1, 2)
         grid.addWidget(self.stop_button, 5, 2)
 
-        self.setLayout(grid)
+        # 엑셀 export layout
+        dir_label = QLabel("""<p>엑셀 작업할 폴더를 선택하세요</p>""")
+        self.excel_dir_edit = QLineEdit()
+        self.excel_dir_edit.setReadOnly(True)
+        excel_dir_button = QPushButton('엑셀작업할 폴더 선택')
+        excel_dir_button.setToolTip('엑셀작업할 폴더 선택')
+        excel_dir_button.clicked.connect(self.choose_directory)
+
+        excel_start_button = QPushButton('시작')
+        excel_start_button.setToolTip('엑셀작업 시작')
+        excel_start_button.clicked.connect(self.excel_process)
+
+        excel_v_box = QVBoxLayout()
+        excel_v_box.addWidget(dir_label)
+        excel_v_box.addSpacing(20)
+        excel_h_box = QHBoxLayout()
+        excel_h_box.addWidget(self.excel_dir_edit)
+        excel_h_box.addWidget(excel_dir_button)
+        excel_v_box.addLayout(excel_h_box)
+        excel_v_box.addWidget(excel_start_button)
+        excel_v_box.addStretch()
+
+        auto_query_widget = QWidget()
+        auto_query_widget.setLayout(grid)
+
+        export_excel_widget = QWidget()
+        export_excel_widget.setLayout(excel_v_box)
+
+        self.stack_layout = QStackedLayout()
+        self.stack_layout.addWidget(auto_query_widget)
+        self.stack_layout.addWidget(export_excel_widget)
+
+        main_v_box = QVBoxLayout()
+        main_v_box.addWidget(page_combo)
+        main_v_box.addLayout(self.stack_layout)
+
+        self.setLayout(main_v_box)
+
+    def switchPage(self, index):
+        """화면 변경"""
+        self.stack_layout.setCurrentIndex(index)
+
+    def excel_process(self):
+        if self.excel_dir != '':
+            try:
+                export_to_excel(self.excel_dir)
+                QMessageBox.information(
+                    self, '알림', '작업 완료', QMessageBox.StandardButton.Ok)
+            except Exception as e:
+                logging.error(f'엑섹작업 오류: {traceback.format_exc()}')
+                QMessageBox.warning(self, '알림', f'엑셀작업시 오류 발생: {traceback.format_exc()}',
+                                    QMessageBox.StandardButton.Ok)
+        else:
+            QMessageBox.warning(self, '알림', '엑셀작업할 폴더를 선택하세요!',
+                                QMessageBox.StandardButton.Ok)
 
     def choose_directory(self):
         btn_text = self.sender().text()
@@ -291,6 +356,9 @@ class MainWindow(QWidget):
         elif selected_dir and '결과' in btn_text:
             self.dest_dir_edit.setText(selected_dir)
             self.dest_dir = selected_dir
+        elif selected_dir and '엑셀' in btn_text:
+            self.excel_dir_edit.setText(selected_dir)
+            self.excel_dir = selected_dir
 
     def start_process(self):
         """Create instance of worker thread to handle process."""
