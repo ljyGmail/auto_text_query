@@ -236,11 +236,13 @@ class MainWindow(QWidget):
         dir_label = QLabel(
             """<p>원본폴더 / 결과폴더를 선택하세요:</p>""")
         self.src_dir_edit = QLineEdit()
+        self.src_dir_edit.setReadOnly(True)
         src_dir_button = QPushButton("원본 폴더")
         src_dir_button.setToolTip("원본 폴더 선택")
         src_dir_button.clicked.connect(self.choose_directory)
 
         self.dest_dir_edit = QLineEdit()
+        self.dest_dir_edit.setReadOnly(True)
         dest_dir_button = QPushButton("결과 폴더")
         dest_dir_button.setToolTip("결과  폴더 선택")
         dest_dir_button.clicked.connect(self.choose_directory)
@@ -387,6 +389,15 @@ class MainWindow(QWidget):
 
     def process_finished(self):
         self.display_log_tedit.append('### 처리 완료 ###')
+
+    def closeEvent(self, event):
+        reply = QMessageBox.question(self, '종료', '프로그램을 종료하시겠습니까?',
+                                     QMessageBox.StandardButton.Yes, QMessageBox.StandardButton.No)
+
+        if reply == QMessageBox.StandardButton.Yes:
+            event.accept()
+        else:
+            event.ignore()
 
 
 if __name__ == '__main__':
