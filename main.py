@@ -184,14 +184,19 @@ class Worker(QThread):
                         logging.info('결과 텍스트를 파일에 쓰기 완료')
                 else:  # 불일치하는 경우: 결과 폴더에 원본 텍스트를 쓰고 하위에 에러폴더를 생성해서 결과를 에러폴더에 저장
                     logging.info('원본 항목수와 결과 항목수 불일치')
-                    with open(Path(self.dest_dir) / filename, 'w', encoding='UTF-8') as fh:
+
+                    os.makedirs(Path(self.dest_dir) /
+                                'warning' / '원본', exist_ok=True)  # warning/원본 폴더 생성
+                    os.makedirs(Path(self.dest_dir) /
+                                'warning' / '결과', exist_ok=True)  # warning/결과 폴더 생성
+
+                    with open(Path(self.dest_dir) / 'warning' / '원본' / filename, 'w', encoding='UTF-8') as fh:
                         fh.write(src_text)
-                        logging.info('원본 텍스트를 파일에 쓰기 완료')
-                        os.makedirs(Path(self.dest_dir) /
-                                    'error', exist_ok=True)  # 에러 폴더 생성
-                        with open(Path(self.dest_dir) / 'error' / filename, 'w', encoding='UTF-8') as err_fh:
-                            err_fh.write(result_text)
-                            logging.info('결과 텍스트를 에러 폴더에 쓰기 완료')
+                        logging.info('원본 텍스트를 warning/원본 폴더에 쓰기 완료')
+                        
+                    with open(Path(self.dest_dir) / 'warning' / '결과' / filename, 'w', encoding='UTF-8') as warn_fh:
+                        warn_fh.write(result_text)
+                        logging.info('결과 텍스트를 warning/결과 폴더에 쓰기 완료')
 
                 browser.quit()
                 logging.info('브라우저 종료')
@@ -200,6 +205,12 @@ class Worker(QThread):
                 self.update_text_edit_signal.emit(log_content)
             except:
                 logging.error(traceback.format_exc())
+
+                os.makedirs(Path(self.dest_dir) / 'error', exist_ok=True) # error폴더 생성
+                with open(Path(self.dest_dir) / 'error' / filename, 'w', encoding='UTF-8') as err_fh:
+                    err_fh.write(src_text)
+                    logging.info('결과 텍스트를 error 폴더에 쓰기 완료')
+
                 self.update_progress_bar_signal.emit(index + 1)
                 self.update_text_edit_signal.emit(
                     f'[ERROR] ==> {filename} 치리오류 ({index + 1} / {file_number})')
@@ -230,7 +241,7 @@ class MainWindow(QWidget):
     def setUpMainWindow(self):
         """Create and arrange widgets in the main window."""
         page_combo = QComboBox()
-        page_combo.addItems(['자동 텍스트 쿼리', '결과 데이터 엑셀 도출'])
+        page_combo.addItems(['자동 텍스트 쿼리', '결과 데이터 엑셀 정재'])
         page_combo.activated.connect(self.switchPage)
 
         dir_label = QLabel(
