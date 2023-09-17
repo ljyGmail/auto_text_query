@@ -1,3 +1,4 @@
+import bs4
 import time
 from bs4 import BeautifulSoup
 from selenium import webdriver
@@ -157,21 +158,22 @@ class Worker(QThread):
                 result_text = ''  # 치러된 결과
                 rows = soup.select('tr.resultB')
                 logging.info(f'결과 항목 개수: {len(rows)}')
+
+                pm_reg = re.compile(r'PMC?id:(\d)+')
                 for row in rows:
                     td = row.td
                     count = len(td.contents)
+                    logging.info(f'현재결과항목길이: {count}')
+                    logging.info(td.contents)
+                    for content in td.contents:
+                        logger.info(type(content))
+                        if isinstance(content, bs4.element.Tag) and content.name == 'a':
+                            result_text += content.string.text + '\n'
+                        elif isinstance(content, bs4.element.NavigableString):
+                            result_text += content.string.text.strip().replace('\n      ', '') + '\n'
 
-                    if count > 0:
-                        item = td.contents[0].string.text.strip().replace(
-                            '\n      ', '')
-                        result_text += item + '\n'
-                    if count > 2:
-                        link = td.contents[2].string.text
-                        result_text += link + '\n'
-                    if count > 4:
-                        bottom_id = td.contents[4].string.text
-                        result_text += bottom_id + '\n'
                     result_text += '\n'
+
                 logging.debug(f'처리된 결과: {result_text}')
                 time.sleep(0.5)
 
@@ -193,7 +195,7 @@ class Worker(QThread):
                     with open(Path(self.dest_dir) / 'warning' / '원본' / filename, 'w', encoding='UTF-8') as fh:
                         fh.write(src_text)
                         logging.info('원본 텍스트를 warning/원본 폴더에 쓰기 완료')
-                        
+
                     with open(Path(self.dest_dir) / 'warning' / '결과' / filename, 'w', encoding='UTF-8') as warn_fh:
                         warn_fh.write(result_text)
                         logging.info('결과 텍스트를 warning/결과 폴더에 쓰기 완료')
@@ -206,7 +208,8 @@ class Worker(QThread):
             except:
                 logging.error(traceback.format_exc())
 
-                os.makedirs(Path(self.dest_dir) / 'error', exist_ok=True) # error폴더 생성
+                os.makedirs(Path(self.dest_dir) / 'error',
+                            exist_ok=True)  # error폴더 생성
                 with open(Path(self.dest_dir) / 'error' / filename, 'w', encoding='UTF-8') as err_fh:
                     err_fh.write(src_text)
                     logging.info('결과 텍스트를 error 폴더에 쓰기 완료')
