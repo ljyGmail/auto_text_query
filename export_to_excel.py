@@ -80,7 +80,7 @@ def export_to_excel(target_dir):
                                             row=row_num, column=5).value = f'https://pubmed.ncbi.nlm.nih.gov/{pm_id}'  # Pubmed(url)
 
                                     pmc_id_mo = re.compile(
-                                        r'PMCid:PMC(\d+)').search(pmid_record)
+                                        r'PMCid:(PMC\d+)').search(pmid_record)
                                     if pmc_id_mo:
                                         pmc_id = pmc_id_mo.group(1)
                                         sheet.cell(
